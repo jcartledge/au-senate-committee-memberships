@@ -1,35 +1,18 @@
 const Xray = require('x-ray');
 const x = Xray();
-const Sequelize = require('sequelize');
-const db = new Sequelize('sqlite://data.sqlite', {
-  pool: {maxIdleTime: 20000}
-});
 
-// Define models.
-const Committee = db.define('committee', {
-  name: {type: Sequelize.STRING},
-  url: {type: Sequelize.STRING}
-});
-
-const Member = db.define('member', {
-  name: {type: Sequelize.STRING}
-});
-
-var Membership = db.define('membership', {
-  office: {type: Sequelize.STRING}
-});
-
-// Create tables and associations.
-Member.sync({force: true}).then(_ => {
-  Committee.sync({force: true}).then(_ => {
-    Member.belongsToMany(Committee, {through: Membership});
-    Committee.belongsToMany(Member, {through: Membership});
-    Membership.sync({force: true}).then(scrapeCommittees);
-  });
-});
+const models = require('./models');
+models.initModels().then(scrapeCommittees);
 
 const committeesURL = 'http://www.aph.gov.au/Parliamentary_Business/Committees/';
 const senateCommitteesSel = '#MainContentPlaceHolder_main_0_content_0_ctl02_ctl02_ctl01_ctl00_LinksList_divColumn li';
+
+function trimmed (obj) {
+  return Object.keys(obj).reduce((acc, key) => {
+    acc[key] = acc[key].trim();
+    return acc;
+  }, obj);
+}
 
 function scrapeCommittees () {
   x(committeesURL, senateCommitteesSel, [{
@@ -37,8 +20,8 @@ function scrapeCommittees () {
     name: 'a'
   }])((err, committeeResults) => {
     if (err) throw err;
-    committeeResults.forEach(committeeResult => {
-      Committee.create(committeeResult).then(scrapeMembers);
+    committeeResults.map(trimmed).forEach(committeeResult => {
+      models.Committee.create(committeeResult).then(scrapeMembers);
     });
   });
 }
@@ -49,8 +32,8 @@ function scrapeMembers (committee) {
     name: '.title'
   }])((err, memberResults) => {
     if (err) throw err;
-    memberResults.forEach(memberResult => {
-      Member.findCreateFind({
+    memberResults.map(trimmed).forEach(memberResult => {
+      models.Member.findCreateFind({
         where: {name: memberResult.name}
       }).spread(member => {
         committee.addMember(member, {office: memberResult.office});
