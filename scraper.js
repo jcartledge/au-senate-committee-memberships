@@ -2,7 +2,7 @@ const Xray = require('x-ray');
 const x = Xray();
 
 const models = require('./models');
-models.initModels().then(scrapeCommittees);
+models.initModels({force: true}).then(scrapeCommittees);
 
 const committeesURL = 'http://www.aph.gov.au/Parliamentary_Business/Committees/';
 const senateCommitteesSel = '#MainContentPlaceHolder_main_0_content_0_ctl02_ctl02_ctl01_ctl00_LinksList_divColumn li';

@@ -16,12 +16,12 @@ const Membership = db.define('membership', {
 });
 
 // Create tables and associations.
-function initModels () {
-  return Member.sync({force: true}).then(_ => {
-    return Committee.sync({force: true}).then(_ => {
+function initModels (options) {
+  return Member.sync(options).then(_ => {
+    return Committee.sync(options).then(_ => {
       Member.belongsToMany(Committee, {through: Membership});
       Committee.belongsToMany(Member, {through: Membership});
-      return Membership.sync({force: true});
+      return Membership.sync(options);
     });
   });
 }
