@@ -1,7 +1,5 @@
 const Sequelize = require('sequelize');
-const db = new Sequelize('sqlite://data.sqlite', {
-  pool: {maxIdleTime: 20000}
-});
+const db = new Sequelize('sqlite://data.sqlite');
 
 // Define models.
 const Committee = db.define('committee', {
