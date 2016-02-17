@@ -1,60 +1,60 @@
-// This is a template for a Node.js scraper on morph.io (https://morph.io)
+const Xray = require('x-ray');
+const x = Xray();
+const Sequelize = require('sequelize');
+const db = new Sequelize('sqlite://data.sqlite', {
+  pool: {maxIdleTime: 20000}
+});
 
-var cheerio = require('cheerio');
-var request = require('request');
-var sqlite3 = require('sqlite3').verbose();
+// Define models.
+const Committee = db.define('committee', {
+  name: {type: Sequelize.STRING},
+  url: {type: Sequelize.STRING}
+});
 
-function initDatabase (callback) {
-  // Set up sqlite database.
-  var db = new sqlite3.Database('data.sqlite');
-  db.serialize(function () {
-    db.run('CREATE TABLE IF NOT EXISTS data (name TEXT)');
-    callback(db);
+const Member = db.define('member', {
+  name: {type: Sequelize.STRING}
+});
+
+var Membership = db.define('membership', {
+  office: {type: Sequelize.STRING}
+});
+
+// Create tables and associations.
+Member.sync({force: true}).then(_ => {
+  Committee.sync({force: true}).then(_ => {
+    Member.belongsToMany(Committee, {through: Membership});
+    Committee.belongsToMany(Member, {through: Membership});
+    Membership.sync({force: true}).then(scrapeCommittees);
   });
-}
+});
 
-function updateRow (db, value) {
-  // Insert some data.
-  var statement = db.prepare('INSERT INTO data VALUES (?)');
-  statement.run(value);
-  statement.finalize();
-}
+const committeesURL = 'http://www.aph.gov.au/Parliamentary_Business/Committees/';
+const senateCommitteesSel = '#MainContentPlaceHolder_main_0_content_0_ctl02_ctl02_ctl01_ctl00_LinksList_divColumn li';
 
-function readRows (db) {
-  // Read some data.
-  db.each('SELECT rowid AS id, name FROM data', function (err, row) {
-    if (err) return console.log(err);
-    console.log(row.id + ': ' + row.name);
-  });
-}
-
-function fetchPage (url, callback) {
-  // Use request to read in pages.
-  request(url, function (error, response, body) {
-    if (error) {
-      console.log('Error requesting page: ' + error);
-      return;
-    }
-
-    callback(body);
-  });
-}
-
-function run (db) {
-  // Use request to read in pages.
-  fetchPage('https://morph.io', function (body) {
-    // Use cheerio to find things in the page with css selectors.
-    var $ = cheerio.load(body);
-
-    $('div.media-body span.p-name').each(function () {
-      var value = $(this).text().trim();
-      updateRow(db, value);
+function scrapeCommittees () {
+  x(committeesURL, senateCommitteesSel, [{
+    url: 'a@href',
+    name: 'a'
+  }])((err, committeeResults) => {
+    if (err) throw err;
+    committeeResults.forEach(committeeResult => {
+      Committee.create(committeeResult).then(scrapeMembers);
     });
-
-    readRows(db);
-
-    db.close();
   });
 }
 
-initDatabase(run);
+function scrapeMembers (committee) {
+  x(committee.url + '/Committee_Membership', '.search-filter-results li', [{
+    office: 'h3',
+    name: '.title'
+  }])((err, memberResults) => {
+    if (err) throw err;
+    memberResults.forEach(memberResult => {
+      Member.findCreateFind({
+        where: {name: memberResult.name}
+      }).spread(member => {
+        committee.addMember(member, {office: memberResult.office});
+      });
+    });
+  });
+}
